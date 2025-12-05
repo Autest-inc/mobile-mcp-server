@@ -1,6 +1,13 @@
 // Cloudflare Workers用のエントリーポイント
 // 注意: このプロジェクトはNode.js固有の機能（fs、os、crypto、child_processなど）を
 // 使用しているため、Cloudflare Workersでは完全に動作しない可能性があります。
+
+// ExecutionContext型の定義（Cloudflare Workers用）
+interface ExecutionContext {
+	waitUntil(promise: Promise<any>): void;
+	passThroughOnException(): void;
+}
+
 export default {
 	async fetch(request: Request, env: any, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
