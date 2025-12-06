@@ -1,5 +1,5 @@
 {
-	"name": "mobile-mcp",
+	"name": "mobile-mcp-server",
 	"compatibility_date": "2025-12-05",
 	"main": "src/worker.ts",
 	"compatibility_flags": ["nodejs_compat"],
