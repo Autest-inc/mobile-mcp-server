@@ -308,78 +308,218 @@ Mobile MCPサーバーをGoogle Cloud Runにデプロイして、リモートか
 
 ### 前提条件
 
-- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) がインストールされていること
-- Google Cloud プロジェクトが作成されていること
-- Container Registry API が有効になっていること
+1. **Google Cloud SDKのインストール**
+   ```bash
+   # macOS
+   brew install google-cloud-sdk
+
+   # または公式インストーラーを使用
+   # https://cloud.google.com/sdk/docs/install
+   ```
+
+2. **Google Cloud プロジェクトの作成**
+   - [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+   - 新しいプロジェクトを作成、または既存のプロジェクトを選択
+   - プロジェクトIDをメモしておく
+
+3. **認証とプロジェクト設定**
+   ```bash
+   # Google Cloudにログイン
+   gcloud auth login
+
+   # プロジェクトを設定
+   gcloud config set project YOUR_PROJECT_ID
+
+   # Docker認証を設定（Container Registry用）
+   gcloud auth configure-docker gcr.io
+
+   # 現在の設定を確認
+   gcloud config list
+   ```
+
+4. **必要なAPIの有効化**
+   ```bash
+   # Cloud Build API
+   gcloud services enable cloudbuild.googleapis.com
+
+   # Container Registry API
+   gcloud services enable containerregistry.googleapis.com
+
+   # Cloud Run API
+   gcloud services enable run.googleapis.com
+
+   # すべてのAPIが有効か確認
+   gcloud services list --enabled
+   ```
+
+5. **必要な権限の確認**
+   - Cloud Build Editor ロール
+   - Cloud Run Admin ロール
+   - Service Account User ロール
+   - Storage Admin ロール（Container Registry用）
 
 ### デプロイ方法
 
 #### 方法1: Makefileを使用（推奨）
 
+最も簡単で推奨される方法です。
+
+**ステップ1: プロジェクトIDの設定**
 ```bash
-# プロジェクトIDを設定（オプション: gcloud config set project でも可）
+# 環境変数で設定（このセッションのみ有効）
 export PROJECT_ID=your-project-id
 
-# 利用可能なコマンドを確認
-make help
+# または、gcloud configで永続的に設定
+gcloud config set project your-project-id
+```
 
-# Dockerイメージをビルド
+**ステップ2: 利用可能なコマンドの確認**
+```bash
+make help
+```
+
+**ステップ3: Dockerイメージのビルド**
+```bash
+# ローカルでDockerイメージをビルド
 make docker-build
 
-# ローカルでDockerコンテナを実行（テスト用）
+# ビルドが成功したことを確認
+docker images | grep mobile-mcp-server
+```
+
+**ステップ4: ローカルでのテスト（オプション）**
+```bash
+# ローカルでDockerコンテナを実行してテスト
 make docker-run
 
-# Dockerイメージをプッシュ
+# 別のターミナルでヘルスチェック
+curl http://localhost:8080/health
+```
+
+**ステップ5: Container Registryへのプッシュ**
+```bash
+# DockerイメージをContainer Registryにプッシュ
 make docker-push
 
-# Cloud Runにデプロイ（ビルド + プッシュ + デプロイ）
+# プッシュが成功したことを確認
+gcloud container images list --repository=gcr.io/$(gcloud config get-value project)
+```
+
+**ステップ6: Cloud Runへのデプロイ**
+```bash
+# Cloud Runにデプロイ（ビルド済みイメージを使用）
 make cloud-run-deploy
 
-# または、Cloud Buildを使用してビルドとデプロイ
-make cloud-run-build
+# デプロイが完了すると、サービスURLが表示されます
+# 例: https://mobile-mcp-server-xxxxx-an.a.run.app
+```
+
+**ステップ7: デプロイの確認**
+```bash
+# サービス情報を確認
+make cloud-run-describe
 
 # ログを確認
 make cloud-run-logs
 
-# サービス情報を確認
-make cloud-run-describe
+# ヘルスチェック
+curl https://your-service-url.run.app/health
+```
+
+**代替: Cloud Buildを使用した一括デプロイ**
+```bash
+# Cloud Buildでビルド、プッシュ、デプロイを一括実行
+make cloud-run-build
 ```
 
 #### 方法2: デプロイスクリプトを使用
+
+シェルスクリプトを使用した簡単なデプロイ方法です。
 
 ```bash
 # プロジェクトIDを設定
 export GOOGLE_CLOUD_PROJECT=your-project-id
 
+# デプロイスクリプトに実行権限を付与（初回のみ）
+chmod +x cloud-run-deploy.sh
+
 # デプロイスクリプトを実行
 ./cloud-run-deploy.sh
 ```
 
+このスクリプトは以下を自動的に実行します：
+1. Dockerイメージのビルド
+2. Container Registryへのプッシュ
+3. Cloud Runへのデプロイ
+
 #### 方法3: Cloud Buildを使用
 
+Cloud Buildを使用して、GCP上でビルドとデプロイを一括実行します。
+
 ```bash
+# プロジェクトIDを設定
+gcloud config set project your-project-id
+
 # Cloud Buildでビルドとデプロイを実行
 gcloud builds submit --config cloudbuild.yaml
+
+# または、Makefileを使用
+make cloud-run-build
 ```
 
-#### 方法4: 手動でデプロイ
+この方法の利点：
+- ローカルにDockerをインストールする必要がない
+- ビルドがGCP上で実行されるため、一貫性が保たれる
+- CI/CDパイプラインに組み込みやすい
 
+#### 方法4: 手動でデプロイ（詳細な制御が必要な場合）
+
+各ステップを手動で実行する方法です。細かい制御が必要な場合に使用します。
+
+**ステップ1: Dockerイメージのビルド**
 ```bash
+# プロジェクトIDを取得
+PROJECT_ID=$(gcloud config get-value project)
+
 # Dockerイメージをビルド
-docker build -t gcr.io/YOUR_PROJECT_ID/mobile-mcp-server:latest .
+docker build -t gcr.io/${PROJECT_ID}/mobile-mcp-server:latest .
+```
 
-# Container Registryにプッシュ
-docker push gcr.io/YOUR_PROJECT_ID/mobile-mcp-server:latest
+**ステップ2: Container Registryへのプッシュ**
+```bash
+# Docker認証を設定（初回のみ、または認証エラーが発生した場合）
+gcloud auth configure-docker gcr.io
 
-# Cloud Runにデプロイ
+# イメージをプッシュ
+docker push gcr.io/${PROJECT_ID}/mobile-mcp-server:latest
+```
+
+**ステップ3: Cloud Runへのデプロイ**
+```bash
 gcloud run deploy mobile-mcp-server \
-  --image gcr.io/YOUR_PROJECT_ID/mobile-mcp-server:latest \
+  --image gcr.io/${PROJECT_ID}/mobile-mcp-server:latest \
   --platform managed \
   --region asia-northeast1 \
   --allow-unauthenticated \
   --port 8080 \
+  --memory 384Mi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 10 \
+  --timeout 300 \
+  --set-env-vars PORT=8080
+```
+
+**カスタム設定の例**
+```bash
+# CORSを制限する場合
+gcloud run deploy mobile-mcp-server \
+  --image gcr.io/${PROJECT_ID}/mobile-mcp-server:latest \
+  --set-env-vars ALLOWED_ORIGINS=https://example.com,https://app.example.com \
   --memory 512Mi \
-  --cpu 1
+  --min-instances 1 \
+  --max-instances 20 \
+  ...
 ```
 
 ### MCPクライアントからの接続
@@ -404,21 +544,169 @@ Cloud Runで以下の環境変数を設定できます：
 - `PORT`: サーバーのポート番号（デフォルト: 8080）
 - `ALLOWED_ORIGINS`: CORSで許可するオリジンをカンマ区切りで指定（例: `https://example.com,https://app.example.com`）。未設定の場合は`*`（すべてのオリジンを許可）
 
-例：
+**環境変数の設定方法**
+
+方法1: デプロイ時に設定
 ```bash
 gcloud run deploy mobile-mcp-server \
   --set-env-vars ALLOWED_ORIGINS=https://example.com,https://app.example.com \
+  --set-env-vars PORT=8080 \
   ...
 ```
 
+方法2: 既存サービスの更新
+```bash
+gcloud run services update mobile-mcp-server \
+  --set-env-vars ALLOWED_ORIGINS=https://example.com \
+  --region asia-northeast1
+```
+
+方法3: Makefileで設定
+```bash
+# Makefileのcloud-run-deployターゲットを編集して環境変数を追加
+# または、直接gcloudコマンドを実行
+```
+
+### デプロイ後の確認とトラブルシューティング
+
+**1. サービスURLの確認**
+```bash
+# サービスURLを取得
+gcloud run services describe mobile-mcp-server \
+  --region asia-northeast1 \
+  --format 'value(status.url)'
+```
+
+**2. ヘルスチェック**
+```bash
+# ヘルスチェックエンドポイントをテスト
+curl https://your-service-url.run.app/health
+
+# 期待されるレスポンス: {"status":"ok"}
+```
+
+**3. ログの確認**
+```bash
+# リアルタイムでログを確認
+gcloud run services logs tail mobile-mcp-server \
+  --region asia-northeast1
+
+# または、Makefileを使用
+make cloud-run-logs
+```
+
+**4. サービスの詳細情報**
+```bash
+# サービスの設定とステータスを確認
+make cloud-run-describe
+
+# または、直接gcloudコマンドを使用
+gcloud run services describe mobile-mcp-server \
+  --region asia-northeast1
+```
+
+**5. トラブルシューティング**
+
+問題: デプロイが失敗する
+```bash
+# ビルドログを確認
+gcloud builds list --limit=5
+
+# 特定のビルドのログを確認
+gcloud builds log BUILD_ID
+```
+
+問題: サービスが起動しない
+```bash
+# ログを確認してエラーを特定
+make cloud-run-logs
+
+# メモリ不足の場合は、メモリを増やす
+gcloud run services update mobile-mcp-server \
+  --memory 512Mi \
+  --region asia-northeast1
+```
+
+問題: CORSエラーが発生する
+```bash
+# ALLOWED_ORIGINS環境変数を設定
+gcloud run services update mobile-mcp-server \
+  --set-env-vars ALLOWED_ORIGINS=https://your-domain.com \
+  --region asia-northeast1
+```
+
+### サービスの更新と削除
+
+**サービスの更新**
+```bash
+# 新しいイメージをビルドしてプッシュ
+make docker-build
+make docker-push
+
+# サービスを更新
+make cloud-run-deploy
+```
+
+**サービスの削除**
+```bash
+# 確認付きで削除
+make cloud-run-delete
+
+# または、直接gcloudコマンドを使用
+gcloud run services delete mobile-mcp-server \
+  --region asia-northeast1 \
+  --quiet
+```
+
+### リソース設定とコスト最適化
+
+**デフォルト設定（コスト最適化済み）**
+- **メモリ**: 384Mi（MCPサーバーには十分）
+- **CPU**: 1コア
+- **最小インスタンス**: 0（コールドスタートを許容、コスト削減）
+- **最大インスタンス**: 10
+- **タイムアウト**: 300秒（5分）
+
+**パフォーマンス重視の設定**
+```bash
+gcloud run deploy mobile-mcp-server \
+  --memory 512Mi \
+  --cpu 2 \
+  --min-instances 1 \
+  --max-instances 20 \
+  ...
+```
+
+**コスト削減の設定**
+```bash
+gcloud run deploy mobile-mcp-server \
+  --memory 256Mi \
+  --cpu 1 \
+  --min-instances 0 \
+  --max-instances 5 \
+  ...
+```
+
+**コスト見積もり**
+- Cloud Runはリクエスト数と実行時間に基づいて課金されます
+- 無料枠: 月200万リクエスト、360,000 GB秒、180,000 vCPU秒
+- 詳細: [Cloud Run の料金](https://cloud.google.com/run/pricing)
+
 ### 注意事項
 
-- Cloud Runでは、Streamable HTTPトランスポートのみがサポートされています（stdioトランスポートは使用できません）
-- デフォルトでは、サーバーはStreamable HTTPトランスポートで起動します
-- ヘルスチェックエンドポイント: `https://your-service-url.run.app/health`
-- セキュリティのため、本番環境では`ALLOWED_ORIGINS`環境変数でCORSを制限することを推奨します
+- **トランスポート**: Cloud Runでは、Streamable HTTPトランスポートのみがサポートされています（stdioトランスポートは使用できません）
+- **デフォルト動作**: サーバーはStreamable HTTPトランスポートで起動します
+- **ヘルスチェック**: `https://your-service-url.run.app/health` で確認可能
+- **セキュリティ**: 本番環境では`ALLOWED_ORIGINS`環境変数でCORSを制限することを強く推奨します
+- **認証**: 本番環境では`--no-allow-unauthenticated`を使用して認証を有効にすることを検討してください
+- **リージョン**: デフォルトは`asia-northeast1`（東京）です。ユーザーに近いリージョンを選択することでレイテンシを削減できます
 
-詳細については、[Google Cloud Run のドキュメント](https://docs.cloud.google.com/run/docs/host-mcp-servers?hl=ja)を参照してください。
+### 参考リンク
+
+- [Google Cloud Run のドキュメント](https://docs.cloud.google.com/run/docs/host-mcp-servers?hl=ja)
+- [Cloud Run で MCP サーバーをホストする](https://docs.cloud.google.com/run/docs/host-mcp-servers?hl=ja)
+- [Cloud Run の料金](https://cloud.google.com/run/pricing)
+- [Cloud Build のドキュメント](https://cloud.google.com/build/docs)
 
 # Thanks to all contributors ❤️
 

@@ -17,6 +17,7 @@ help:
 	@echo "  make docker-run             - Run Docker container locally"
 	@echo "  make docker-push           - Push Docker image to Container Registry"
 	@echo "  make docker-clean          - Remove local Docker images"
+	@echo "  make docker-clean-remote   - Remove Docker image from Container Registry"
 	@echo ""
 	@echo "Cloud Run Commands:"
 	@echo "  make cloud-run-build       - Build and push using Cloud Build"
@@ -42,7 +43,8 @@ docker-build:
 		exit 1; \
 	fi
 	@echo "Building Docker image: $(IMAGE_NAME):$(IMAGE_TAG)"
-	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+	@echo "Platform: linux/amd64 (required for Cloud Run)"
+	docker build --platform linux/amd64 -t $(IMAGE_NAME):$(IMAGE_TAG) .
 	@echo "Build complete!"
 
 # Dockerコンテナをローカルで実行
@@ -63,7 +65,10 @@ docker-push:
 		echo "Error: PROJECT_ID is not set. Set it as environment variable or run 'gcloud config set project YOUR_PROJECT_ID'"; \
 		exit 1; \
 	fi
+	@echo "Configuring Docker authentication for Container Registry..."
+	@gcloud auth configure-docker gcr.io --quiet || true
 	@echo "Pushing Docker image: $(IMAGE_NAME):$(IMAGE_TAG)"
+	@echo "Note: Using --platform linux/amd64 to ensure Cloud Run compatibility"
 	docker push $(IMAGE_NAME):$(IMAGE_TAG)
 	@echo "Push complete!"
 
@@ -72,6 +77,22 @@ docker-clean:
 	@echo "Removing local Docker images..."
 	@docker images $(IMAGE_NAME) -q | xargs -r docker rmi -f || true
 	@echo "Clean complete!"
+
+# Container Registryからイメージを削除
+docker-clean-remote:
+	@if [ -z "$(PROJECT_ID)" ]; then \
+		echo "Error: PROJECT_ID is not set. Set it as environment variable or run 'gcloud config set project YOUR_PROJECT_ID'"; \
+		exit 1; \
+	fi
+	@echo "WARNING: This will delete the Docker image from Container Registry: $(IMAGE_NAME):$(IMAGE_TAG)"
+	@read -p "Are you sure? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		gcloud container images delete $(IMAGE_NAME):$(IMAGE_TAG) --quiet --project $(PROJECT_ID) || true; \
+		echo "Image deleted from Container Registry."; \
+	else \
+		echo "Cancelled."; \
+	fi
 
 # Cloud Buildでビルドとプッシュ
 cloud-run-build:
@@ -89,6 +110,10 @@ cloud-run-deploy:
 		echo "Error: PROJECT_ID is not set. Set it as environment variable or run 'gcloud config set project YOUR_PROJECT_ID'"; \
 		exit 1; \
 	fi
+	@echo "Building and pushing Docker image (always rebuild to ensure linux/amd64 platform)..."
+	@echo "Note: This ensures the image is built for the correct platform (linux/amd64) for Cloud Run"
+	$(MAKE) docker-build
+	$(MAKE) docker-push
 	@echo "Deploying to Cloud Run..."
 	@echo "  Project: $(PROJECT_ID)"
 	@echo "  Region: $(REGION)"
@@ -100,12 +125,11 @@ cloud-run-deploy:
 		--region $(REGION) \
 		--allow-unauthenticated \
 		--port $(PORT) \
-		--memory 512Mi \
+		--memory 384Mi \
 		--cpu 1 \
 		--min-instances 0 \
 		--max-instances 10 \
 		--timeout 300 \
-		--set-env-vars PORT=$(PORT) \
 		--project $(PROJECT_ID)
 	@echo ""
 	@echo "Deployment complete!"

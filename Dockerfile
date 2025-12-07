@@ -25,7 +25,11 @@ WORKDIR /app
 COPY package*.json ./
 
 # 本番用の依存関係のみをインストール
-RUN npm ci --only=production && npm cache clean --force
+# --ignore-scripts で prepare スクリプト（husky）をスキップ（本番環境では不要）
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+# 不要なファイルを削除してイメージサイズを削減
+RUN rm -rf /tmp/* /var/tmp/* /root/.npm /root/.cache
 
 # ビルド済みファイルをコピー
 COPY --from=builder /app/lib ./lib
