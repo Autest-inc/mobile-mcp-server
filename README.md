@@ -314,7 +314,38 @@ Mobile MCPサーバーをGoogle Cloud Runにデプロイして、リモートか
 
 ### デプロイ方法
 
-#### 方法1: デプロイスクリプトを使用（推奨）
+#### 方法1: Makefileを使用（推奨）
+
+```bash
+# プロジェクトIDを設定（オプション: gcloud config set project でも可）
+export PROJECT_ID=your-project-id
+
+# 利用可能なコマンドを確認
+make help
+
+# Dockerイメージをビルド
+make docker-build
+
+# ローカルでDockerコンテナを実行（テスト用）
+make docker-run
+
+# Dockerイメージをプッシュ
+make docker-push
+
+# Cloud Runにデプロイ（ビルド + プッシュ + デプロイ）
+make cloud-run-deploy
+
+# または、Cloud Buildを使用してビルドとデプロイ
+make cloud-run-build
+
+# ログを確認
+make cloud-run-logs
+
+# サービス情報を確認
+make cloud-run-describe
+```
+
+#### 方法2: デプロイスクリプトを使用
 
 ```bash
 # プロジェクトIDを設定
@@ -324,14 +355,14 @@ export GOOGLE_CLOUD_PROJECT=your-project-id
 ./cloud-run-deploy.sh
 ```
 
-#### 方法2: Cloud Buildを使用
+#### 方法3: Cloud Buildを使用
 
 ```bash
 # Cloud Buildでビルドとデプロイを実行
 gcloud builds submit --config cloudbuild.yaml
 ```
 
-#### 方法3: 手動でデプロイ
+#### 方法4: 手動でデプロイ
 
 ```bash
 # Dockerイメージをビルド
