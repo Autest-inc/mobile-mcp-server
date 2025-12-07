@@ -57,16 +57,19 @@ export const createMcpServer = (): McpServer => {
 		}
 	};
 
-	const tool = (name: string, description: string, paramsSchema: ZodRawShape, cb: (args: z.objectOutputType<ZodRawShape, ZodTypeAny>) => Promise<string>) => {
-		const wrappedCb = async (args: ZodRawShape): Promise<CallToolResult> => {
+	const tool = (name: string, description: string, paramsSchema: ZodRawShape, cb: (args: z.objectOutputType<ZodRawShape, ZodTypeAny>) => Promise<string | CallToolResult>) => {
+		const wrappedCb = async (args: z.objectOutputType<ZodRawShape, ZodTypeAny>): Promise<CallToolResult> => {
 			try {
 				trace(`Invoking ${name} with args: ${JSON.stringify(args)}`);
 				const response = await cb(args);
-				trace(`=> ${response}`);
+				trace(`=> ${typeof response === "string" ? response : "CallToolResult"}`);
 				posthog("tool_invoked", { "ToolName": name }).then();
-				return {
-					content: [{ type: "text", text: response }],
-				};
+				if (typeof response === "string") {
+					return {
+						content: [{ type: "text", text: response }],
+					};
+				}
+				return response;
 			} catch (error: any) {
 				posthog("tool_failed", { "ToolName": name }).then();
 				if (error instanceof ActionableError) {
@@ -84,7 +87,7 @@ export const createMcpServer = (): McpServer => {
 			}
 		};
 
-		server.tool(name, description, paramsSchema, args => wrappedCb(args));
+		server.tool(name, description, paramsSchema, (args: z.objectOutputType<ZodRawShape, ZodTypeAny>) => wrappedCb(args));
 	};
 
 	const posthog = async (event: string, properties: Record<string, string | number>) => {
@@ -354,7 +357,7 @@ export const createMcpServer = (): McpServer => {
 		},
 		async ({ device, x, y }) => {
 			const robot = getRobotFromDevice(device);
-			await robot!.doubleTap(x, y);
+			await robot.doubleTap(x, y);
 			return `Double-tapped on screen at coordinates: ${x}, ${y}`;
 		}
 	);
@@ -501,61 +504,53 @@ export const createMcpServer = (): McpServer => {
 		}
 	);
 
-	server.tool(
+	tool(
 		"mobile_take_screenshot",
 		"Take a screenshot of the mobile device. Use this to understand what's on screen, if you need to press an element that is available through view hierarchy then you must list elements on screen instead. Do not cache this result.",
 		{
 			device: z.string().describe("The device identifier to use. Use mobile_list_available_devices to find which devices are available to you.")
 		},
 		async ({ device }) => {
-			try {
-				const robot = getRobotFromDevice(device);
-				const screenSize = await robot.getScreenSize();
+			const robot = getRobotFromDevice(device);
+			const screenSize = await robot.getScreenSize();
 
-				let screenshot = await robot.getScreenshot();
-				let mimeType = "image/png";
+			let screenshot = await robot.getScreenshot();
+			let mimeType = "image/png";
 
-				// validate we received a png, will throw exception otherwise
-				const image = new PNG(screenshot);
-				const pngSize = image.getDimensions();
-				if (pngSize.width <= 0 || pngSize.height <= 0) {
-					throw new ActionableError("Screenshot is invalid. Please try again.");
-				}
-
-				if (isScalingAvailable()) {
-					trace("Image scaling is available, resizing screenshot");
-					const image = Image.fromBuffer(screenshot);
-					const beforeSize = screenshot.length;
-					screenshot = image.resize(Math.floor(pngSize.width / screenSize.scale))
-						.jpeg({ quality: 75 })
-						.toBuffer();
-
-					const afterSize = screenshot.length;
-					trace(`Screenshot resized from ${beforeSize} bytes to ${afterSize} bytes`);
-
-					mimeType = "image/jpeg";
-				}
-
-				const screenshot64 = screenshot.toString("base64");
-				trace(`Screenshot taken: ${screenshot.length} bytes`);
-				posthog("tool_invoked", {
-					"ToolName": "mobile_take_screenshot",
-					"ScreenshotFilesize": screenshot64.length,
-					"ScreenshotMimeType": mimeType,
-					"ScreenshotWidth": pngSize.width,
-					"ScreenshotHeight": pngSize.height,
-				}).then();
-
-				return {
-					content: [{ type: "image", data: screenshot64, mimeType }]
-				};
-			} catch (err: any) {
-				error(`Error taking screenshot: ${err.message} ${err.stack}`);
-				return {
-					content: [{ type: "text", text: `Error: ${err.message}` }],
-					isError: true,
-				};
+			// validate we received a png, will throw exception otherwise
+			const image = new PNG(screenshot);
+			const pngSize = image.getDimensions();
+			if (pngSize.width <= 0 || pngSize.height <= 0) {
+				throw new ActionableError("Screenshot is invalid. Please try again.");
 			}
+
+			if (isScalingAvailable()) {
+				trace("Image scaling is available, resizing screenshot");
+				const image = Image.fromBuffer(screenshot);
+				const beforeSize = screenshot.length;
+				screenshot = image.resize(Math.floor(pngSize.width / screenSize.scale))
+					.jpeg({ quality: 75 })
+					.toBuffer();
+
+				const afterSize = screenshot.length;
+				trace(`Screenshot resized from ${beforeSize} bytes to ${afterSize} bytes`);
+
+				mimeType = "image/jpeg";
+			}
+
+			const screenshot64 = screenshot.toString("base64");
+			trace(`Screenshot taken: ${screenshot.length} bytes`);
+			posthog("tool_invoked", {
+				"ToolName": "mobile_take_screenshot",
+				"ScreenshotFilesize": screenshot64.length,
+				"ScreenshotMimeType": mimeType,
+				"ScreenshotWidth": pngSize.width,
+				"ScreenshotHeight": pngSize.height,
+			}).then();
+
+			return {
+				content: [{ type: "image", data: screenshot64, mimeType }]
+			};
 		}
 	);
 
