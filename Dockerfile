@@ -45,6 +45,8 @@ ENV NODE_ENV=production
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:${PORT}/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Streamable HTTPトランスポートでサーバーを起動
-CMD ["node", "lib/index.js", "--port", "8080", "--transport", "streamable"]
+# Streamable HTTPとSSEの両方のトランスポートでサーバーを起動
+# 環境変数PORTが設定されている場合はそれを使用（Cloud Runが自動設定）
+# bothを指定することで、/mcp（Streamable HTTP）と/sse（SSE）の両方をサポート
+CMD ["node", "lib/index.js", "--transport", "both"]
 

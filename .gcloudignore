@@ -10,7 +10,6 @@ coverage
 .idea
 *.log
 test
-wrangler.jsonc
 mobile-mcp.png
 README.md
 CHANGELOG.md

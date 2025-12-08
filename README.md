@@ -117,6 +117,14 @@ How we help to scale mobile automation:
 </p>
 
 
+## 📚 ドキュメント
+
+このプロジェクトの詳細なドキュメント：
+
+- **[デプロイメントガイド](docs/DEPLOYMENT.md)**: ローカル環境とCloud Runへのデプロイ方法
+- **[ローカル開発ガイド](docs/LOCAL_DEVELOPMENT.md)**: ローカル環境での開発方法
+- **[アーキテクチャドキュメント](docs/ARCHITECTURE.md)**: アーキテクチャと設計思想
+
 ## 📚 Wiki page
 
 More details in our [wiki page](https://github.com/mobile-next/mobile-mcp/wiki) for setup, configuration and debugging related questions.
@@ -302,9 +310,210 @@ On iOS, you'll need Xcode and to run the Simulator before using Mobile MCP with 
 - `xcrun simctl list`
 - `xcrun simctl boot "iPhone 16"`
 
-## 🚀 Cloud Run へのデプロイ
+## 💻 ローカルでサーバーを実行する方法
 
-Mobile MCPサーバーをGoogle Cloud Runにデプロイして、リモートからアクセスできるようにすることができます。
+ローカルでサーバーを実行することで、ローカルの物理デバイスやエミュレーター/シミュレーターに直接アクセスできます。これは、Cloud Run環境では不可能なローカルデバイスへのアクセスを可能にします。
+
+### 前提条件
+
+ローカル実行には、以下の前提条件が必要です：
+
+1. **Node.js v22以上**がインストールされていること
+2. **iOS開発**: XcodeとiOS Simulatorがインストールされていること（macOSのみ）
+3. **Android開発**: Android SDKがインストールされ、`ANDROID_HOME`環境変数が設定されていること
+4. **物理デバイス**: USB接続されたデバイスでUSBデバッグが有効になっていること
+
+### インストール
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/mobile-next/mobile-mcp-server.git
+cd mobile-mcp-server
+
+# 依存関係をインストール
+npm install
+
+# ビルド
+npm run build
+```
+
+### サーバーの起動
+
+#### 方法1: HTTPサーバーとして起動（推奨）
+
+HTTPサーバーとして起動すると、MCPクライアントからHTTP経由で接続できます：
+
+```bash
+# ビルド（初回のみ、またはコードを変更した場合）
+npm run build
+
+# サーバーを起動（Streamable HTTPとSSEの両方をサポート、デフォルトポート8081）
+npm start
+
+# または、カスタムポートを指定
+node lib/index.js --port 8081 --transport both
+
+# 別のポートを使用する場合（例：ポート3000が使用中の場合）
+node lib/index.js --port 3001 --transport both
+
+# SSEのみを有効にする
+npm run start:sse
+
+# Streamable HTTPのみを有効にする
+npm run start:streamable
+```
+
+#### 方法2: stdioモードで起動（MCPクライアントが直接起動する場合）
+
+MCPクライアントがサーバーを直接起動する場合は、stdioモードを使用します：
+
+```bash
+node lib/index.js --stdio
+```
+
+または、MCPクライアントの設定で：
+
+```json
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "command": "node",
+      "args": ["/path/to/mobile-mcp-server/lib/index.js", "--stdio"]
+    }
+  }
+}
+```
+
+### MCPクライアントからの接続
+
+HTTPサーバーとして起動した場合、MCPクライアントの設定で以下のように接続します：
+
+#### Streamable HTTPを使用する場合
+
+```json
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "url": "http://localhost:8081/mcp",
+      "transport": "streamable-http"
+    }
+  }
+}
+```
+
+#### SSEを使用する場合
+
+```json
+{
+  "mcpServers": {
+    "mobile-mcp": {
+      "url": "http://localhost:8081/sse",
+      "transport": "sse"
+    }
+  }
+}
+```
+
+> **注意**: デフォルトポートは8081です。別のポートで起動した場合は、上記のURLのポート番号を変更してください。
+
+### 環境変数
+
+ローカル実行時に以下の環境変数を設定できます：
+
+- `PORT`: サーバーのポート番号（デフォルト: 8081、`--port`オプションで上書き可能）
+- `ALLOWED_ORIGINS`: CORSで許可するオリジンをカンマ区切りで指定（例: `http://localhost:8081,http://localhost:5173`）。未設定の場合は`*`（すべてのオリジンを許可）
+- `LOG_FILE`: ログファイルのパス（オプション）
+- `DEBUG_AUTH`: 認証ヘッダーのデバッグログを有効にする（`true`を設定）
+
+### デバイスへのアクセス
+
+サーバーを起動したら、MCPクライアントから以下のツールを使用してデバイスにアクセスできます：
+
+1. **`mobile_list_available_devices`**: 利用可能なデバイスを一覧表示
+2. **`mobile_launch_app`**: アプリを起動
+3. **`mobile_take_screenshot`**: スクリーンショットを取得
+4. **その他のツール**: 画面操作、アプリ管理など
+
+### トラブルシューティング
+
+#### デバイスが検出されない場合
+
+**iOS Simulator:**
+```bash
+# シミュレーターの一覧を確認
+xcrun simctl list
+
+# シミュレーターを起動
+xcrun simctl boot "iPhone 16"
+```
+
+**Android Emulator:**
+```bash
+# エミュレーターの一覧を確認
+emulator -list-avds
+
+# エミュレーターを起動
+emulator -avd <AVD_NAME>
+```
+
+**物理デバイス:**
+- iOS: USB接続し、デバイスで「このコンピューターを信頼」を選択
+- Android: USBデバッグを有効にし、`adb devices`でデバイスが表示されることを確認
+
+#### ポートが既に使用されている場合
+
+```bash
+# 別のポートを指定（例：ポート3000が使用中の場合）
+node lib/index.js --port 3001 --transport both
+```
+
+#### CORSエラーが発生する場合
+
+```bash
+# 許可するオリジンを環境変数で指定
+ALLOWED_ORIGINS=http://localhost:8081,http://localhost:5173 node lib/index.js --port 8081 --transport both
+```
+
+#### ヘルスチェック
+
+サーバーが正常に起動しているか確認：
+
+```bash
+# ヘルスチェックエンドポイント（デフォルトポート8081）
+curl http://localhost:8081/health
+
+# 期待されるレスポンス: {"status":"ok"}
+```
+
+### 開発モード
+
+開発中は、TypeScriptを直接実行することもできます（`ts-node`が必要）：
+
+```bash
+# ts-nodeをインストール（開発時のみ）
+npm install -D ts-node
+
+# TypeScriptを直接実行（デフォルトポート8081）
+npx ts-node src/index.ts --port 8081 --transport both
+```
+
+または、`npm run watch`でTypeScriptの変更を監視しながらビルド：
+
+```bash
+# 別のターミナルで
+npm run watch
+
+# 別のターミナルで（デフォルトポート8081）
+node lib/index.js --port 8081 --transport both
+```
+
+## 🚀 Cloud Run へのデプロイ（オプション）
+
+> **注意**: Cloud Run環境では、ローカルの物理デバイスやエミュレーターに直接アクセスできません。**ローカルデバイスを使用する場合は、上記の「ローカルでサーバーを実行する方法」を参照してください。**
+
+このサーバーは**Google Cloud Run**にもデプロイできます。Cloud Runにデプロイすることで、リモートからアクセスできるようになりますが、ローカルデバイスにはアクセスできません。リモートデバイス接続サービス（Firebase Test Lab、BrowserStack、Sauce Labsなど）を使用する必要があります。
+
+> **注意**: このサーバーはCloudflare Workersには対応していません。Cloud Runでのみ動作します。
 
 ### 前提条件
 
@@ -634,6 +843,39 @@ gcloud run services update mobile-mcp-server \
   --set-env-vars ALLOWED_ORIGINS=https://your-domain.com \
   --region asia-northeast1
 ```
+
+問題: 認証エラーが発生する（"Authentication error while communicating with MCP server"）
+```bash
+# これはCloud RunのIAMポリシーが正しく設定されていない可能性があります
+
+# 1. IAMポリシーを確認
+gcloud run services get-iam-policy mobile-mcp-server \
+  --region asia-northeast1 \
+  --project dev-autest
+
+# 2. IAMポリシーを手動で設定（プロジェクトの管理者権限が必要）
+gcloud run services add-iam-policy-binding mobile-mcp-server \
+  --region asia-northeast1 \
+  --member allUsers \
+  --role roles/run.invoker \
+  --project dev-autest
+
+# 3. または、Makefileを使用して再デプロイ（自動的にIAMポリシーを設定しようとします）
+make cloud-run-deploy
+
+# 4. デバッグモードを有効にして、リクエストヘッダーを確認
+gcloud run services update mobile-mcp-server \
+  --set-env-vars DEBUG_AUTH=true \
+  --region asia-northeast1
+
+# 5. ログを確認して、認証ヘッダーが送信されているか確認
+make cloud-run-logs
+```
+
+**認証エラーの原因と解決方法**:
+- **原因**: Cloud RunサービスのIAMポリシーが`allUsers`に`roles/run.invoker`ロールを付与していない
+- **解決方法**: 上記のコマンドでIAMポリシーを設定するか、プロジェクトの管理者に依頼する
+- **注意**: `--allow-unauthenticated`フラグだけでは不十分な場合があります。明示的にIAMポリシーを設定する必要があります
 
 ### サービスの更新と削除
 

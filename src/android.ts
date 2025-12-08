@@ -529,7 +529,11 @@ export class AndroidDeviceManager {
 				deviceType: this.getDeviceType(name),
 			}));
 		} catch (error) {
-			console.error("Could not execute adb command, maybe ANDROID_HOME is not set?");
+			// Cloud Run環境ではデバイスにアクセスできないのは正常なため、警告を抑制
+			// ローカル環境でのみ警告を表示
+			if (!process.env.K_SERVICE && !process.env.K_REVISION) {
+				console.warn("Could not execute adb command, maybe ANDROID_HOME is not set?");
+			}
 			return [];
 		}
 	}

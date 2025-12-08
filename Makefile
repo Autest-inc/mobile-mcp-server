@@ -132,6 +132,20 @@ cloud-run-deploy:
 		--timeout 300 \
 		--project $(PROJECT_ID)
 	@echo ""
+	@echo "Setting IAM policy to allow unauthenticated access..."
+	@echo "Note: If this fails, you may need to ask a project admin to set the IAM policy manually:"
+	@echo "  gcloud run services add-iam-policy-binding $(SERVICE_NAME) \\"
+	@echo "    --region $(REGION) \\"
+	@echo "    --member allUsers \\"
+	@echo "    --role roles/run.invoker \\"
+	@echo "    --project $(PROJECT_ID)"
+	@gcloud run services add-iam-policy-binding $(SERVICE_NAME) \
+		--region $(REGION) \
+		--member allUsers \
+		--role roles/run.invoker \
+		--project $(PROJECT_ID) \
+		2>/dev/null || echo "Warning: IAM policy setting failed. Please set it manually or ask a project admin."
+	@echo ""
 	@echo "Deployment complete!"
 	@echo "Service URL: $$(gcloud run services describe $(SERVICE_NAME) --region $(REGION) --format 'value(status.url)' --project $(PROJECT_ID))"
 

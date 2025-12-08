@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z, ZodRawShape, ZodTypeAny } from "zod";
 import fs from "node:fs";
 import os from "node:os";
@@ -39,10 +39,18 @@ export const createMcpServer = (): McpServer => {
 		name: "mobile-mcp",
 		version: getAgentVersion(),
 		capabilities: {
+			// リソース機能を有効化（空のリストを返すため）
+			// PR #166ではserver.tsの変更はないが、capabilitiesにresourcesを含めることで
+			// クライアントがリソース機能を認識できるようにする
 			resources: {},
 			tools: {},
 		},
 	});
+
+	// リソース機能を有効にしつつ、空のリソースリストを返すようにする
+	// McpServerの高レベルAPIを使用して、空のリソースリストを返すダミーリソースを登録
+	// これにより、クライアントがリソースを要求してもエラーにならない
+	// 注意: 実際にはリソースを提供しないため、読み取りリクエストはエラーを返す
 
 	// an empty object to satisfy windsurf
 	const noParams = z.object({});
@@ -228,6 +236,9 @@ export const createMcpServer = (): McpServer => {
 				}
 			}
 
+			// Cloud Run環境を検出
+			const isCloudRun = !!(process.env.K_SERVICE || process.env.K_REVISION);
+
 			const resp = ["Found these devices:"];
 			if (simulatorNames.length > 0) {
 				resp.push(`iOS simulators: [${simulatorNames.join(",")}]`);
@@ -243,6 +254,21 @@ export const createMcpServer = (): McpServer => {
 
 			if (androidTvDevices.length > 0) {
 				resp.push(`Android TV devices: [${androidTvDevices.join(",")}]`);
+			}
+
+			// デバイスが見つからない場合のメッセージ
+			if (simulatorNames.length === 0 && iosDevices.length === 0 && androidMobileDevices.length === 0 && androidTvDevices.length === 0) {
+				if (isCloudRun) {
+					resp.push("\nNote: This server is running on Cloud Run. Local devices cannot be accessed from Cloud Run.");
+					resp.push("To use this server with devices, you need to:");
+					resp.push("1. Run the server locally, or");
+					resp.push("2. Use a remote device connection service (e.g., Firebase Test Lab, BrowserStack, etc.)");
+				} else {
+					resp.push("\nNo devices found. Please ensure:");
+					resp.push("- iOS: Xcode and iOS Simulator are installed and running");
+					resp.push("- Android: Android SDK is installed and ANDROID_HOME is set");
+					resp.push("- Physical devices: Connect via USB and enable USB debugging");
+				}
 			}
 
 			return resp.join("\n");

@@ -11,6 +11,5 @@ coverage
 *.log
 lib
 test
-wrangler.jsonc
 mobile-mcp.png
 

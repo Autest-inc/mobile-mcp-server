@@ -13,6 +13,10 @@
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsc && chmod +x lib/index.js",
+    "start": "node lib/index.js --port 8081 --transport both",
+    "start:stdio": "node lib/index.js --stdio",
+    "start:sse": "node lib/index.js --port 8081 --transport sse",
+    "start:streamable": "node lib/index.js --port 8081 --transport streamable",
     "lint": "eslint .",
     "fixlint": "eslint . --fix",
     "test": "nyc mocha --require ts-node/register test/*.ts",

@@ -251,7 +251,11 @@ export class IosManager {
 
 	public listDevices(): IosDevice[] {
 		if (!this.isGoIosInstalled()) {
-			console.error("go-ios is not installed, no physical iOS devices can be detected");
+			// Cloud Run環境ではデバイスにアクセスできないのは正常なため、警告を抑制
+			// ローカル環境でのみ警告を表示
+			if (!process.env.K_SERVICE && !process.env.K_REVISION) {
+				console.warn("go-ios is not installed, no physical iOS devices can be detected");
+			}
 			return [];
 		}
 
